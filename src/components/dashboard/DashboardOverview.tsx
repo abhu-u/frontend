@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,69 +15,85 @@ import {
   Users,
   ChefHat,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Loader2,
+  RefreshCw
 } from "lucide-react";
+import { getDashboardAnalytics } from "@/services/analyticsService";
 
-interface OrderItem {
-  id: number;
-  tableNumber: number;
-  customerName: string;
-  items: string[];
-  total: number;
-  status: "pending" | "preparing" | "ready" | "delivered";
-  timestamp: string;
-}
-
-const recentOrders: OrderItem[] = [
-  {
-    id: 1,
-    tableNumber: 5,
-    customerName: "John Smith",
-    items: ["Caesar Salad", "Grilled Salmon"],
-    total: 37.98,
-    status: "pending",
-    timestamp: "2 mins ago"
-  },
-  {
-    id: 2,
-    tableNumber: 3,
-    customerName: "Sarah Wilson",
-    items: ["Chicken Wings", "Caesar Salad"],
-    total: 28.98,
-    status: "preparing",
-    timestamp: "5 mins ago"
-  },
-  {
-    id: 3,
-    tableNumber: 8,
-    customerName: "Mike Johnson",
-    items: ["Grilled Salmon"],
-    total: 24.99,
-    status: "ready",
-    timestamp: "8 mins ago"
-  },
-  {
-    id: 4,
-    tableNumber: 12,
-    customerName: "Emily Davis",
-    items: ["Pasta Carbonara", "Garlic Bread"],
-    total: 19.99,
-    status: "delivered",
-    timestamp: "15 mins ago"
-  }
-];
-
-const getStatusColor = (status: string) => {
+const getStatusColor = (status) => {
   switch (status) {
     case "pending": return "status-pending";
     case "preparing": return "status-preparing";
     case "ready": return "status-ready";
-    case "delivered": return "status-completed";
+    case "served": return "status-completed";
+    case "cancelled": return "bg-red-500/20 text-red-600 border-red-500/30";
     default: return "bg-muted";
   }
 };
 
 export const DashboardOverview = () => {
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchAnalytics = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getDashboardAnalytics('today');
+      setAnalytics(data);
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnalytics();
+    
+    // Refresh data every 30 seconds
+    const interval = setInterval(fetchAnalytics, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading && !analytics) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading dashboard data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !analytics) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center h-96">
+          <Card className="max-w-md w-full">
+            <CardContent className="p-8 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-4">
+                <ArrowDown className="h-8 w-8 text-destructive" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Failed to Load Dashboard</h3>
+              <p className="text-muted-foreground mb-6">{error}</p>
+              <Button onClick={fetchAnalytics} className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Section */}
@@ -86,6 +103,10 @@ export const DashboardOverview = () => {
           <p className="text-muted-foreground">Welcome back! Here's what's happening at your restaurant today.</p>
         </div>
         <div className="flex space-x-3">
+          <Button variant="outline" size="sm" onClick={fetchAnalytics} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <GlassButton>
             <Eye className="h-4 w-4 mr-2" />
             View Menu
@@ -104,10 +125,14 @@ export const DashboardOverview = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Total Orders Today</p>
-                <p className="text-3xl font-bold text-foreground">24</p>
-                <div className="flex items-center text-sm text-success mt-1">
-                  <ArrowUp className="h-4 w-4 mr-1" />
-                  <span>+12% from yesterday</span>
+                <p className="text-3xl font-bold text-foreground">{analytics?.totalOrdersToday || 0}</p>
+                <div className={`flex items-center text-sm mt-1 ${analytics?.ordersChangePositive ? 'text-success' : 'text-destructive'}`}>
+                  {analytics?.ordersChangePositive ? (
+                    <ArrowUp className="h-4 w-4 mr-1" />
+                  ) : (
+                    <ArrowDown className="h-4 w-4 mr-1" />
+                  )}
+                  <span>{analytics?.ordersChange || '0%'} from yesterday</span>
                 </div>
               </div>
               <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -122,10 +147,14 @@ export const DashboardOverview = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Revenue Today</p>
-                <p className="text-3xl font-bold text-foreground">$542</p>
-                <div className="flex items-center text-sm text-success mt-1">
-                  <ArrowUp className="h-4 w-4 mr-1" />
-                  <span>+8% from yesterday</span>
+                <p className="text-3xl font-bold text-foreground">${analytics?.revenueToday || '0.00'}</p>
+                <div className={`flex items-center text-sm mt-1 ${analytics?.revenueChangePositive ? 'text-success' : 'text-destructive'}`}>
+                  {analytics?.revenueChangePositive ? (
+                    <ArrowUp className="h-4 w-4 mr-1" />
+                  ) : (
+                    <ArrowDown className="h-4 w-4 mr-1" />
+                  )}
+                  <span>{analytics?.revenueChange || '0%'} from yesterday</span>
                 </div>
               </div>
               <div className="h-12 w-12 bg-success/10 rounded-full flex items-center justify-center">
@@ -140,10 +169,10 @@ export const DashboardOverview = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Pending Orders</p>
-                <p className="text-3xl font-bold text-foreground">3</p>
+                <p className="text-3xl font-bold text-foreground">{analytics?.pendingOrders || 0}</p>
                 <div className="flex items-center text-sm text-warning mt-1">
                   <Clock className="h-4 w-4 mr-1" />
-                  <span>Needs attention</span>
+                  <span>{analytics?.pendingOrders > 0 ? 'Needs attention' : 'All clear'}</span>
                 </div>
               </div>
               <div className="h-12 w-12 bg-warning/10 rounded-full flex items-center justify-center">
@@ -158,10 +187,10 @@ export const DashboardOverview = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">Popular Dish</p>
-                <p className="text-lg font-bold text-foreground">Caesar Salad</p>
+                <p className="text-lg font-bold text-foreground">{analytics?.popularDish?.name || 'N/A'}</p>
                 <div className="flex items-center text-sm text-primary mt-1">
                   <ChefHat className="h-4 w-4 mr-1" />
-                  <span>12 orders today</span>
+                  <span>{analytics?.popularDish?.count || 0} orders today</span>
                 </div>
               </div>
               <div className="h-12 w-12 bg-orange-secondary rounded-full flex items-center justify-center">
@@ -183,33 +212,40 @@ export const DashboardOverview = () => {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-primary font-bold text-sm">T{order.tableNumber}</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <p className="font-semibold text-foreground">{order.customerName}</p>
-                        <Badge className={`${getStatusColor(order.status)} text-xs`}>
-                          {order.status}
-                        </Badge>
+            {analytics?.recentOrders?.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No orders yet today</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {analytics?.recentOrders?.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <span className="text-primary font-bold text-sm">{order.tableNumber}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {order.items.join(", ")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{order.timestamp}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="font-semibold text-foreground">{order.customerName}</p>
+                          <Badge className={`${getStatusColor(order.status)} text-xs`}>
+                            {order.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {order.items.join(", ")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{order.timestamp}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-foreground">${order.total.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">{order.tableNumber}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-foreground">${order.total}</p>
-                    <p className="text-xs text-muted-foreground">Table {order.tableNumber}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -233,11 +269,13 @@ export const DashboardOverview = () => {
               <div className="mt-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">This Week</span>
-                  <span className="font-semibold text-foreground">$3,247</span>
+                  <span className="font-semibold text-foreground">
+                    ${analytics?.revenueByDay?.reduce((sum, day) => sum + day.revenue, 0).toFixed(2) || '0.00'}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Last Week</span>
-                  <span className="font-semibold text-muted-foreground">$2,891</span>
+                  <span className="text-muted-foreground">Today</span>
+                  <span className="font-semibold text-muted-foreground">${analytics?.revenueToday || '0.00'}</span>
                 </div>
               </div>
             </CardContent>
@@ -256,7 +294,9 @@ export const DashboardOverview = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">Most Ordered</p>
-                    <p className="text-xs text-muted-foreground">Caesar Salad - 12 orders</p>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics?.popularDish?.name || 'N/A'} - {analytics?.popularDish?.count || 0} orders
+                    </p>
                   </div>
                 </div>
               </div>
@@ -268,7 +308,9 @@ export const DashboardOverview = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">Least Ordered</p>
-                    <p className="text-xs text-muted-foreground">Fish Tacos - 1 order</p>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics?.leastOrderedDish?.name || 'N/A'} - {analytics?.leastOrderedDish?.count || 0} order
+                    </p>
                   </div>
                 </div>
               </div>

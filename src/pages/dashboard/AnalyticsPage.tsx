@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -8,7 +8,8 @@ import {
   Award,
   Download,
   Calendar,
-  Filter,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   Card,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HeroButton, GlassButton } from "@/components/ui/button-variants";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +30,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -54,93 +55,12 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-
-// Dummy data for charts
-const ordersOverTime = [
-  { date: "Mon", orders: 45 },
-  { date: "Tue", orders: 52 },
-  { date: "Wed", orders: 48 },
-  { date: "Thu", orders: 61 },
-  { date: "Fri", orders: 78 },
-  { date: "Sat", orders: 95 },
-  { date: "Sun", orders: 87 },
-];
-
-const revenueData = [
-  { date: "Mon", revenue: 3450 },
-  { date: "Tue", revenue: 4120 },
-  { date: "Wed", revenue: 3890 },
-  { date: "Thu", revenue: 4650 },
-  { date: "Fri", revenue: 6200 },
-  { date: "Sat", revenue: 7850 },
-  { date: "Sun", revenue: 7100 },
-];
-
-const categorySales = [
-  { name: "Mains", value: 4500, percentage: 38 },
-  { name: "Drinks", value: 2800, percentage: 24 },
-  { name: "Starters", value: 2200, percentage: 19 },
-  { name: "Desserts", value: 2300, percentage: 19 },
-];
-
-const popularHours = [
-  { hour: "11am", orders: 12 },
-  { hour: "12pm", orders: 28 },
-  { hour: "1pm", orders: 35 },
-  { hour: "2pm", orders: 22 },
-  { hour: "6pm", orders: 45 },
-  { hour: "7pm", orders: 62 },
-  { hour: "8pm", orders: 58 },
-  { hour: "9pm", orders: 38 },
-];
-
-const recentOrders = [
-  {
-    id: "ORD-001",
-    date: "2025-10-06",
-    table: "Table 5",
-    items: "Margherita Pizza, Caesar Salad",
-    amount: 42.5,
-    payment: "Card",
-    status: "Completed",
-  },
-  {
-    id: "ORD-002",
-    date: "2025-10-06",
-    table: "Table 12",
-    items: "Ribeye Steak, Red Wine",
-    amount: 85.0,
-    payment: "Cash",
-    status: "Completed",
-  },
-  {
-    id: "ORD-003",
-    date: "2025-10-06",
-    table: "Table 3",
-    items: "Spaghetti Carbonara, Tiramisu",
-    amount: 38.5,
-    payment: "Card",
-    status: "Pending",
-  },
-  {
-    id: "ORD-004",
-    date: "2025-10-06",
-    table: "Table 8",
-    items: "Burger, Fries, Milkshake",
-    amount: 28.0,
-    payment: "Card",
-    status: "Completed",
-  },
-  {
-    id: "ORD-005",
-    date: "2025-10-05",
-    table: "Table 1",
-    items: "Chicken Curry, Naan Bread",
-    amount: 32.5,
-    payment: "Cash",
-    status: "Completed",
-  },
-];
+import {
+  getDashboardAnalytics,
+  getOrdersOverTime,
+  getPopularHours,
+  getRecentActivity,
+} from "../../services/analyticsService";
 
 const CHART_COLORS = {
   primary: "hsl(var(--chart-1))",
@@ -150,15 +70,7 @@ const CHART_COLORS = {
   danger: "hsl(var(--chart-5))",
 };
 
-interface MetricCardProps {
-  title: string;
-  value: string;
-  change: string;
-  trend: "up" | "down";
-  icon: React.ReactNode;
-}
-
-const MetricCard = ({ title, value, change, trend, icon }: MetricCardProps) => {
+const MetricCard = ({ title, value, change, trend, icon }) => {
   return (
     <Card className="stat-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -194,8 +106,66 @@ const MetricCard = ({ title, value, change, trend, icon }: MetricCardProps) => {
 export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("This Week");
   const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const [metrics, setMetrics] = useState(null);
+  const [ordersOverTime, setOrdersOverTime] = useState([]);
+  const [revenueData, setRevenueData] = useState([]);
+  const [categorySales, setCategorySales] = useState([]);
+  const [popularHours, setPopularHours] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
 
-  const getStatusBadge = (status: string) => {
+  const fetchAllData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const period = dateRange === "Today" ? "today" : dateRange === "This Week" ? "week" : "month";
+
+      const [analyticsData, ordersTimeData, hoursData, activityData] = await Promise.all([
+        getDashboardAnalytics(period),
+        getOrdersOverTime(period),
+        getPopularHours(),
+        getRecentActivity(20),
+      ]);
+
+      setMetrics({
+        totalOrders: analyticsData.totalOrdersToday,
+        ordersChange: analyticsData.ordersChange,
+        ordersChangePositive: analyticsData.ordersChangePositive,
+        totalRevenue: analyticsData.revenueToday,
+        revenueChange: analyticsData.revenueChange,
+        revenueChangePositive: analyticsData.revenueChangePositive,
+        avgOrderValue: analyticsData.totalOrdersToday > 0 
+          ? (parseFloat(analyticsData.revenueToday) / analyticsData.totalOrdersToday).toFixed(2)
+          : "0.00",
+        topItem: analyticsData.popularDish.name,
+        topItemCount: analyticsData.popularDish.count,
+      });
+
+      setOrdersOverTime(ordersTimeData.ordersOverTime);
+      setRevenueData(ordersTimeData.revenueData);
+      setCategorySales(analyticsData.categorySales);
+      setPopularHours(hoursData);
+      setRecentOrders(activityData);
+
+    } catch (err) {
+      console.error("Error fetching analytics data:", err);
+      setError(err.message || "Failed to load analytics data");
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange]);
+
+  useEffect(() => {
+    fetchAllData();
+
+    const interval = setInterval(fetchAllData, 60000);
+    return () => clearInterval(interval);
+  }, [fetchAllData]);
+
+  const getStatusBadge = (status) => {
     switch (status) {
       case "Completed":
         return <Badge variant="default">Completed</Badge>;
@@ -208,10 +178,76 @@ export default function AnalyticsPage() {
     }
   };
 
+  const filteredOrders = recentOrders.filter((order) =>
+    order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.table.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.items.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const exportToCSV = () => {
+    const csvContent = [
+      ["Order ID", "Date", "Table", "Items", "Amount", "Payment", "Status"],
+      ...recentOrders.map(order => [
+        order.id,
+        order.date,
+        order.table,
+        order.items,
+        order.amount,
+        order.payment,
+        order.status
+      ])
+    ].map(row => row.join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analytics-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  if (loading && !metrics) {
+    return (
+      <div className="min-h-screen bg-background p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading analytics data...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !metrics) {
+    return (
+      <div className="min-h-screen bg-background p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <Card className="max-w-md w-full">
+              <CardContent className="p-8 text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-4">
+                  <TrendingDown className="h-8 w-8 text-destructive" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Failed to Load Analytics</h3>
+                <p className="text-muted-foreground mb-6">{error}</p>
+                <Button onClick={fetchAllData} className="gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold tracking-tight">
@@ -242,254 +278,258 @@ export default function AnalyticsPage() {
                 <DropdownMenuItem onClick={() => setDateRange("This Month")}>
                   This Month
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDateRange("Custom Range")}>
-                  Custom Range
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <GlassButton className="gap-2">
-                  <Filter className="h-4 w-4" />
-                  Filter
-                </GlassButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Filter by</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>All Tables</DropdownMenuItem>
-                <DropdownMenuItem>Section A</DropdownMenuItem>
-                <DropdownMenuItem>Section B</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>All Categories</DropdownMenuItem>
-                <DropdownMenuItem>Mains</DropdownMenuItem>
-                <DropdownMenuItem>Drinks</DropdownMenuItem>
-                <DropdownMenuItem>Desserts</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={fetchAllData} 
+              disabled={loading}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
 
-            <HeroButton className="gap-2">
+            <HeroButton className="gap-2" onClick={exportToCSV}>
               <Download className="h-4 w-4" />
               Export CSV
             </HeroButton>
           </div>
         </div>
 
-        {/* Key Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <MetricCard
             title="Total Orders"
-            value="466"
-            change="+12.5%"
-            trend="up"
+            value={metrics?.totalOrders?.toString() || "0"}
+            change={metrics?.ordersChange || "+0%"}
+            trend={metrics?.ordersChangePositive ? "up" : "down"}
             icon={<ShoppingCart className="h-4 w-4" />}
           />
           <MetricCard
             title="Total Revenue"
-            value="$37,210"
-            change="+18.2%"
-            trend="up"
+            value={`$${metrics?.totalRevenue || "0.00"}`}
+            change={metrics?.revenueChange || "+0%"}
+            trend={metrics?.revenueChangePositive ? "up" : "down"}
             icon={<DollarSign className="h-4 w-4" />}
           />
           <MetricCard
             title="Avg Order Value"
-            value="$79.80"
+            value={`$${metrics?.avgOrderValue || "0.00"}`}
             change="+4.7%"
             trend="up"
             icon={<TrendingUp className="h-4 w-4" />}
           />
           <MetricCard
             title="Top Item"
-            value="Ribeye"
-            change="125 orders"
+            value={metrics?.topItem || "N/A"}
+            change={`${metrics?.topItemCount || 0} orders`}
             trend="up"
             icon={<Award className="h-4 w-4" />}
           />
           <MetricCard
-            title="Repeat Customers"
-            value="68%"
-            change="-2.3%"
-            trend="down"
+            title="Active Today"
+            value={metrics?.totalOrders?.toString() || "0"}
+            change="Live data"
+            trend="up"
             icon={<Users className="h-4 w-4" />}
           />
         </div>
 
-        {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Orders Over Time */}
           <Card className="glass">
             <CardHeader>
               <CardTitle>Orders Over Time</CardTitle>
-              <CardDescription>Daily order volume this week</CardDescription>
+              <CardDescription>Daily order volume this {dateRange.toLowerCase()}</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={ordersOverTime}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="orders"
-                    stroke={CHART_COLORS.primary}
-                    strokeWidth={3}
-                    dot={{ fill: CHART_COLORS.primary, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {ordersOverTime.length === 0 ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No order data available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={ordersOverTime}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="orders"
+                      stroke={CHART_COLORS.primary}
+                      strokeWidth={3}
+                      dot={{ fill: CHART_COLORS.primary, r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
-          {/* Revenue Trend */}
           <Card className="glass">
             <CardHeader>
               <CardTitle>Revenue Trend</CardTitle>
               <CardDescription>Daily revenue performance</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={revenueData}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor={CHART_COLORS.success}
-                        stopOpacity={0.3}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor={CHART_COLORS.success}
-                        stopOpacity={0}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => `$${value.toLocaleString()}`}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke={CHART_COLORS.success}
-                    strokeWidth={2}
-                    fill="url(#colorRevenue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {revenueData.length === 0 ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No revenue data available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={revenueData}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor={CHART_COLORS.success}
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={CHART_COLORS.success}
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value) => `$${value.toLocaleString()}`}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke={CHART_COLORS.success}
+                      strokeWidth={2}
+                      fill="url(#colorRevenue)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
-          {/* Category Sales Breakdown */}
           <Card className="glass">
             <CardHeader>
               <CardTitle>Category Sales</CardTitle>
               <CardDescription>Revenue by menu category</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={categorySales}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percentage }) => `${name}: ${percentage}%`}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {categorySales.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          Object.values(CHART_COLORS)[
-                            index % Object.values(CHART_COLORS).length
-                          ]
-                        }
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => `$${value.toLocaleString()}`}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {categorySales.length === 0 || categorySales.every(c => c.value === 0) ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No category data available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={categorySales}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percentage }) => `${name}: ${percentage}%`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {categorySales.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            Object.values(CHART_COLORS)[
+                              index % Object.values(CHART_COLORS).length
+                            ]
+                          }
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value) => `$${value.toLocaleString()}`}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
-          {/* Popular Hours */}
           <Card className="glass">
             <CardHeader>
               <CardTitle>Popular Hours</CardTitle>
               <CardDescription>Busiest times of the day</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={popularHours}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="hour"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Bar
-                    dataKey="orders"
-                    fill={CHART_COLORS.accent}
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {popularHours.length === 0 || popularHours.every(h => h.orders === 0) ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  No hourly data available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={popularHours}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="hour"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <Bar
+                      dataKey="orders"
+                      fill={CHART_COLORS.accent}
+                      radius={[8, 8, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Recent Orders Table */}
         <Card className="glass">
           <CardHeader>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -510,36 +550,43 @@ export default function AnalyticsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Table</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentOrders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>{order.date}</TableCell>
-                    <TableCell>{order.table}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {order.items}
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      ${order.amount.toFixed(2)}
-                    </TableCell>
-                    <TableCell>{order.payment}</TableCell>
-                    <TableCell>{getStatusBadge(order.status)}</TableCell>
+            {filteredOrders.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No orders found</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Table</TableHead>
+                    <TableHead>Items</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="font-medium">{order.id.slice(0, 8)}...</TableCell>
+                      <TableCell>{order.date}</TableCell>
+                      <TableCell>{order.table}</TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {order.items}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        ${order.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell>{order.payment}</TableCell>
+                      <TableCell>{getStatusBadge(order.status)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

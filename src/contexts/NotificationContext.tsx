@@ -26,6 +26,9 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 const STORAGE_KEY = "restaurant_notifications";
 
+// Get API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
   // Load notifications from localStorage on mount
   const [notifications, setNotifications] = useState<OrderNotification[]>(() => {
@@ -73,9 +76,10 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
       return;
     }
 
-    console.log("✅ Connecting socket with user ID:", userId);
+    console.log("✅ Connecting socket to:", API_URL);
+    console.log("✅ With user ID:", userId);
 
-    const socketInstance = io("http://localhost:5000", {
+    const socketInstance = io(API_URL, {
       transports: ["websocket", "polling"],
     });
 
