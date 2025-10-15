@@ -6,6 +6,9 @@ import { HeroButton } from "@/components/ui/button-variants";
 import { QrCode, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
+// ✅ ADD THIS - Get API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const Signup = () => {
   const navigate = useNavigate();
 
@@ -47,7 +50,8 @@ const Signup = () => {
 
     try {
       setLoading(true);
-      const response = await fetch("https://testament-societies-plus-trader.trycloudflare.com", {
+      // ✅ FIXED - Use API_URL with proper endpoint
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
