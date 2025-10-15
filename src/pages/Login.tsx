@@ -32,7 +32,7 @@ const Login = () => {
     setError("");
 
     try {
-      const response = await fetch("https://sphere-yeast-patient-finite.trycloudflare.com", {
+      const response = await fetch("https://thin-desktop-having-mission.trycloudflare.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
