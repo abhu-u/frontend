@@ -47,7 +47,7 @@ const Signup = () => {
 
     try {
       setLoading(true);
-      const response = await fetch("https://thin-desktop-having-mission.trycloudflare.com", {
+      const response = await fetch("https://testament-societies-plus-trader.trycloudflare.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
