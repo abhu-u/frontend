@@ -7,6 +7,9 @@ import { QrCode, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://wind-flat-mirror-alternatively.trycloudflare.com';
+
+
 const Login = () => {
   const [formData, setFormData] = useState({
     email: "",
