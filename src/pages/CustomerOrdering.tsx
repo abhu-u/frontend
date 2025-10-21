@@ -24,7 +24,7 @@ import {
   Bell
 } from "lucide-react";
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "https://wind-flat-mirror-alternatively.trycloudflare.com/api";
 
 const CustomerOrderPage = () => {
   const getTableIdFromUrl = () => {
@@ -796,7 +796,7 @@ const MenuItemCard = ({ item, onAddToCart }) => {
           <div className="w-full h-40 relative overflow-hidden">
             {item.image ? (
               <img 
-                src={`http://localhost:5000${item.image}`} 
+                src={`https://wind-flat-mirror-alternatively.trycloudflare.com${item.image}`} 
                 alt={item.name} 
                 className="w-full h-full object-cover group-active:scale-105 transition-transform duration-300" 
               />
