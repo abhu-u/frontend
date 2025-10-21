@@ -29,7 +29,7 @@ const TablesPage = () => {
   const { toast } = useToast();
 
   // API base URL from environment variable
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL || "https://wind-flat-mirror-alternatively.trycloudflare.com";
 
   // Fetch tables
   const fetchTables = useCallback(async () => {
