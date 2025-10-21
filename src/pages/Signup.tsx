@@ -7,7 +7,7 @@ import { QrCode, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 // ✅ ADD THIS - Get API URL from environment variable
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://wind-flat-mirror-alternatively.trycloudflare.com';
 
 const Signup = () => {
   const navigate = useNavigate();
