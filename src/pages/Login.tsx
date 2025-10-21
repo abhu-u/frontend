@@ -32,7 +32,7 @@ const Login = () => {
     setError("");
 
     try {
-      const response = await fetch("https://logic-lobby-fioricet-sunglasses.trycloudflare.com", {
+      const response = await fetch("https://wind-flat-mirror-alternatively.trycloudflare.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
