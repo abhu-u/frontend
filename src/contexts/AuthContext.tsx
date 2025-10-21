@@ -20,7 +20,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Get API URL from environment variable
 // For microservices, you can use different URLs for different services
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://wind-flat-mirror-alternatively.trycloudflare.com';
 // const AUTH_API = import.meta.env.VITE_API_AUTH || 'http://localhost:5000';
 // const ORDERS_API = import.meta.env.VITE_API_ORDERS || 'http://localhost:8080';
 
