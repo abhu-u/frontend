@@ -28,9 +28,19 @@ const API_BASE_URL = "https://wind-flat-mirror-alternatively.trycloudflare.com/a
 
 const CustomerOrderPage = () => {
   const getTableIdFromUrl = () => {
-    const pathSegments = window.location.pathname.split('/');
-    return pathSegments[pathSegments.length - 1];
-  };
+  const pathSegments = window.location.pathname.split('/').filter(Boolean); // Remove empty strings
+  const tableId = pathSegments[pathSegments.length - 1];
+  
+  console.log('Extracted tableId:', tableId);
+  
+  // Validate tableId
+  if (!tableId || tableId === 'order' || tableId === 'customer') {
+    console.error('Invalid tableId extracted from URL');
+    return null;
+  }
+  
+  return tableId;
+};
 
   const [tableId] = useState(getTableIdFromUrl());
   const [loading, setLoading] = useState(true);
