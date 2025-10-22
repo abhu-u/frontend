@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, User, Calendar } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-const API_BASE_URL = "https://wind-flat-mirror-alternatively.trycloudflare.com/api";
+const API_BASE_URL = "https://platoo.duckdns.org/api";
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
