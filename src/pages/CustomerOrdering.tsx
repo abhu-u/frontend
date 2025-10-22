@@ -24,7 +24,7 @@ import {
   Bell
 } from "lucide-react";
 
-const API_BASE_URL = "https://wind-flat-mirror-alternatively.trycloudflare.com/api";
+const API_BASE_URL = "https://platoo.duckdns.org/api";
 
 const CustomerOrderPage = () => {
   const getTableIdFromUrl = () => {
