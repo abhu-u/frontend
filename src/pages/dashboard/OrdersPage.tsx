@@ -54,7 +54,7 @@ const OrdersPage = () => {
   };
 
   const formatDateTime = (dateString) => {
-    if (!dateString) return { time: 'Just now', date: 'Today' };
+    if (!dateString) return { time: 'Just now', date: 'Today', fullTime: '' };
     
     const date = new Date(dateString);
     const now = new Date();
@@ -138,12 +138,12 @@ const OrdersPage = () => {
       
       if (!token || !user.id) {
         setError('Authentication required. Please log in.');
-        setLoading(false);
+        if (!silent) setLoading(false);
         return;
       }
 
       const statusParam = statusFilter === "all" ? "" : statusFilter;
-      const response = await fetch(`/api/orders/restaurant?status=${statusParam}&limit=100`, {
+      const response = await fetch(`${API_BASE_URL}/orders/restaurant?status=${statusParam}&limit=100`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -192,7 +192,6 @@ const OrdersPage = () => {
         
         // Check if there's a new order (count increased)
         if (silent && filteredOrders.length > previousOrderCountRef.current) {
-          // New order detected! Show a subtle notification or just update
           console.log('New order received!');
         }
         
@@ -213,7 +212,7 @@ const OrdersPage = () => {
         setLoading(false);
       }
     }
-  }, [error, statusFilter, dateFilter, customDate]);
+  }, [error, statusFilter, dateFilter]);
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -226,7 +225,7 @@ const OrdersPage = () => {
         return;
       }
 
-      const response = await fetch(`/api/orders/${orderId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
