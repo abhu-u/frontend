@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ const OrdersPage = () => {
     day: new Date().getDate()
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const previousOrderCountRef = useRef(0);
+  const pollingIntervalRef = useRef(null);
 
   const getAuthData = () => {
     const token = localStorage.getItem('token');
@@ -51,26 +53,61 @@ const OrdersPage = () => {
     return { token, user: { ...(userObj || {}), id: userId } };
   };
 
-  const getTimeAgo = (dateString) => {
-    if (!dateString) return 'Just now';
+  const formatDateTime = (dateString) => {
+    if (!dateString) return { time: 'Just now', date: 'Today' };
     
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = Number(now) - Number(date);
     const diffMins = Math.floor(diffMs / 60000);
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    let timeAgo = '';
+    if (diffMins < 1) timeAgo = 'Just now';
+    else if (diffMins < 60) timeAgo = `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    else {
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) timeAgo = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      else {
+        const diffDays = Math.floor(diffHours / 24);
+        timeAgo = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+      }
+    }
     
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
     
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    today.setHours(0, 0, 0, 0);
+    yesterday.setHours(0, 0, 0, 0);
+    const orderDate = new Date(date);
+    orderDate.setHours(0, 0, 0, 0);
+    
+    let dateLabel = '';
+    if (orderDate.getTime() === today.getTime()) {
+      dateLabel = 'Today';
+    } else if (orderDate.getTime() === yesterday.getTime()) {
+      dateLabel = 'Yesterday';
+    } else {
+      dateLabel = date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
+      });
+    }
+    
+    const timeLabel = date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    
+    return { time: timeAgo, date: dateLabel, fullTime: timeLabel };
   };
 
   const filterOrdersByDate = (ordersArray) => {
-    if (dateFilter === "today") {
+    if (dateFilter === "all") {
+      return ordersArray;
+    } else if (dateFilter === "today") {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       return ordersArray.filter(order => {
@@ -90,9 +127,11 @@ const OrdersPage = () => {
     return ordersArray;
   };
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
       
       const { token, user } = getAuthData();
@@ -104,7 +143,7 @@ const OrdersPage = () => {
       }
 
       const statusParam = statusFilter === "all" ? "" : statusFilter;
-      const response = await fetch(`${API_BASE_URL}/orders/restaurant?status=${statusParam}&limit=100`, {
+      const response = await fetch(`/api/orders/restaurant?status=${statusParam}&limit=100`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -123,7 +162,7 @@ const OrdersPage = () => {
         const ordersArray = Array.isArray(data.data) ? data.data : [];
         
         const transformedOrders = ordersArray.map(order => {
-          const timeAgo = getTimeAgo(order.createdAt);
+          const { time, date, fullTime } = formatDateTime(order.createdAt);
           const tableName = order.tableId?.tableName || 'Unknown';
           const itemNames = order.items?.map(item => 
             `${item.name} x${item.quantity}`
@@ -138,7 +177,9 @@ const OrdersPage = () => {
             subtotal: order.totalPrice || 0,
             tax: 0,
             status: order.status || 'pending',
-            timestamp: timeAgo,
+            timestamp: time,
+            dateLabel: date,
+            fullTime: fullTime,
             customerName: order.customerName || 'Guest',
             customerPhone: '',
             specialInstructions: order.specialInstructions || '',
@@ -148,6 +189,14 @@ const OrdersPage = () => {
         });
         
         const filteredOrders = filterOrdersByDate(transformedOrders);
+        
+        // Check if there's a new order (count increased)
+        if (silent && filteredOrders.length > previousOrderCountRef.current) {
+          // New order detected! Show a subtle notification or just update
+          console.log('New order received!');
+        }
+        
+        previousOrderCountRef.current = filteredOrders.length;
         setOrders(filteredOrders);
         
         if (error && filteredOrders.length > 0) {
@@ -160,7 +209,9 @@ const OrdersPage = () => {
       console.error('Error fetching orders:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, [error, statusFilter, dateFilter, customDate]);
 
@@ -175,7 +226,7 @@ const OrdersPage = () => {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+      const response = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -216,15 +267,17 @@ const OrdersPage = () => {
   };
 
   const handleRefresh = () => {
-    fetchOrders();
+    fetchOrders(false);
   };
 
   const handleCustomDateApply = () => {
     setDateFilter("custom");
     setShowDatePicker(false);
+    fetchOrders(false);
   };
 
   const getDateFilterLabel = () => {
+    if (dateFilter === "all") return "All Time";
     if (dateFilter === "today") return "Today";
     if (dateFilter === "custom") {
       const date = new Date(customDate.year, customDate.month - 1, customDate.day);
@@ -237,16 +290,23 @@ const OrdersPage = () => {
     const { token, user } = getAuthData();
     
     if (token && user.id) {
-      fetchOrders();
-      const interval = setInterval(() => {
-        fetchOrders();
-      }, 30000);
-      return () => clearInterval(interval);
+      fetchOrders(false);
+      
+      // Set up polling to check for new orders every 5 seconds
+      pollingIntervalRef.current = setInterval(() => {
+        fetchOrders(true); // Silent fetch
+      }, 5000);
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+        }
+      };
     } else {
       setLoading(false);
       setError('Please log in to view orders');
     }
-  }, [statusFilter, dateFilter, customDate]);
+  }, [statusFilter, dateFilter]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -357,7 +417,7 @@ const OrdersPage = () => {
               <div className="p-4 space-y-4">
                 <div className="space-y-2">
                   <h4 className="font-semibold text-sm">Select Date</h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <Button
                       variant={dateFilter === "today" ? "default" : "outline"}
                       size="sm"
@@ -370,12 +430,23 @@ const OrdersPage = () => {
                       Today
                     </Button>
                     <Button
+                      variant={dateFilter === "all" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setDateFilter("all");
+                        setShowDatePicker(false);
+                      }}
+                      className="transition-all duration-200"
+                    >
+                      All Time
+                    </Button>
+                    <Button
                       variant={dateFilter === "custom" ? "default" : "outline"}
                       size="sm"
                       onClick={() => setDateFilter("custom")}
                       className="transition-all duration-200"
                     >
-                      Custom Date
+                      Custom
                     </Button>
                   </div>
                 </div>
@@ -465,6 +536,8 @@ const OrdersPage = () => {
             <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 max-w-md mx-auto">
               {dateFilter === "today" 
                 ? "No orders have been placed today yet."
+                : dateFilter === "all"
+                ? "No orders have been placed yet."
                 : `No orders found for ${getDateFilterLabel()}.`}
             </p>
             <Button variant="outline" onClick={handleRefresh} className="gap-2 shadow-sm hover:shadow transition-all duration-200 text-xs sm:text-sm">
@@ -511,9 +584,13 @@ const OrdersPage = () => {
                             Note: {order.specialInstructions}
                           </p>
                         )}
-                        <div className="flex items-center justify-between pt-1 gap-2">
+                        <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
                           <span className="font-bold text-lg sm:text-xl">${order.total.toFixed(2)}</span>
-                          <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded whitespace-nowrap">{order.timestamp}</span>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="bg-muted/50 px-2 py-1 rounded whitespace-nowrap">{order.dateLabel}</span>
+                            <span className="bg-muted/50 px-2 py-1 rounded whitespace-nowrap">{order.fullTime}</span>
+                            <span className="bg-muted/50 px-2 py-1 rounded whitespace-nowrap">{order.timestamp}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
